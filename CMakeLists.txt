@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.0)
+project(MIPS)
+set(CMAKE_BUILD_TYPE "Release")
+
+add_definitions("-O3")
+aux_source_directory(SRC_LIST ./src)
+include_directories(./ ./include)
+set(CMAKE_CXX_STANDARD 14)
+link_directories(./lib)
+add_executable(${PROJECT_NAME} src/MIPS.cpp main.cpp)
+target_link_libraries(${PROJECT_NAME} OpenMeshCore OpenMeshTools)
