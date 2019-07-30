@@ -20,22 +20,24 @@ int main(int argc, char *argv[]) {
     //     std::cout << point[0] << " " << point[1] << " " << point[2] << std::endl;
     // }
 
-    auto param = paratimization(mesh);
+    // auto param = paratimization(mesh);
   
-    Mesh omesh;
-    for (auto v: param) {
-        OpenMesh::Vec3f vert(v[0], v[1], 0.0f);
-        omesh.add_vertex(vert);
-    }
-    for (auto face: mesh.all_faces()) {
-        int cnt = 0;
-        OpenMesh::VertexHandle handles[10];
-        for (auto v: mesh.fv_range(face)) 
-            handles[cnt++] = v;
-        omesh.add_face(handles, cnt);
-    }
-
-    OpenMesh::IO::write_mesh(omesh, path + "_param.obj");
+    // Mesh omesh;
+    // for (auto v: param) {
+    //     OpenMesh::Vec3f vert(v[0], v[1], 0.0f);
+    //     omesh.add_vertex(vert);
+    // }
+    // for (auto face: mesh.all_faces()) {
+    //     int cnt = 0;
+    //     OpenMesh::VertexHandle handles[10];
+    //     for (auto v: mesh.fv_range(face)) 
+    //         handles[cnt++] = v;
+    //     omesh.add_face(handles, cnt);
+    // }
+    using vec = OpenMesh::Vec2f;
+    std::vector<OpenMesh::Vec2f> hh{vec(1.0f, 0.0f), vec(0.0f, 1.0f), vec(1.0f, 1.0f), vec(0.0f, 0.0f)};
+    test(mesh, hh);
+    // OpenMesh::IO::write_mesh(omesh, path + "_param.obj");
 
     return 0;
 }

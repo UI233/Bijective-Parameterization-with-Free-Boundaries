@@ -11,4 +11,6 @@ using Mesh = OpenMesh::PolyMesh_ArrayKernelT<>;
     @return: the parametered point order by the order by the points of input mesh
 */
 std::vector<OpenMesh::Vec2f> paratimization(Mesh&, double error = 0.0001);
+
+void test(Mesh& mesh, const std::vector<OpenMesh::Vec2f>& params);
 #endif

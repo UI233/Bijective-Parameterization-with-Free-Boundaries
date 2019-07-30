@@ -158,8 +158,8 @@ float getEnergy(const Mesh& mesh, const Eigen::VectorXf& params, float epsilon, 
         OpenMesh::Vec3f pe2 = mesh.point(vs[2]) - p0;
 
         // calculate the area of corresponding triangle
-        float su = 0.5 * OpenMesh::cross(ue1, ue2).norm();
-        float sp = 0.5 * OpenMesh::cross(pe1, pe2).norm();
+        float su = 0.5f * OpenMesh::cross(ue1, ue2).norm();
+        float sp = 0.5f * OpenMesh::cross(pe1, pe2).norm();
 
         energy += (1 + (sp * sp) / (su * su)) * (sq(ue2.norm()) * sq(pe1.norm()) + sq(ue1.norm()) * sq(pe2.norm()) - 2.0f * dot(ue2, ue1) * dot(pe2, pe1)) / (4.0f * sp);
     }
@@ -216,8 +216,8 @@ auto calcGrad(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
     for (auto f: mesh.all_faces()) {
         Mesh::VertexHandle vs[3];
         int i = 0;
-        for (auto v: mesh.fv_range(f))
-            vs[i++] = v;
+        for (auto itr = mesh.cfv_ccwbegin(f); itr != mesh.cfv_ccwend(f); itr++)
+            vs[i++] = *itr;
         OpenMesh::Vec3f u0(x[2 * vs[0].idx()], x[2 * vs[0].idx() + 1], 0.0f);
         OpenMesh::Vec3f u1(x[2 * vs[1].idx()], x[2 * vs[1].idx() + 1], 0.0f);
         OpenMesh::Vec3f u2(x[2 * vs[2].idx()], x[2 * vs[2].idx() + 1], 0.0f);
@@ -245,28 +245,35 @@ auto calcGrad(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
         float term1 = (1 + (sp * sp) / (su * su));
         float term2 = (sq(ue2.norm()) * sq(pe1.norm()) + sq(ue1.norm()) * sq(pe2.norm()) - 2.0f * dot(ue2, ue1) * dot(pe2, pe1)) / (4.0f * sp);
 
-        // dE / du0
-        OpenMesh::Vec2f dterm1_du0 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u2 - u1)[1], (u2 - u1)[0]);
-        OpenMesh::Vec3f dterm2_du0 = -cot2 * u1 - cot1 * u2 + (cot1 + cot2) * u0;
-        OpenMesh::Vec2f dE_du0 = dterm1_du0 * term2 + OpenMesh::Vec2f(dterm2_du0[0], dterm2_du0[1]) * term1; 
-        gradx[vs[0].idx() * 2] += dE_du0[0];
-        gradx[vs[0].idx() * 2 + 1] += dE_du0[1];
+        {
+            // dE / du0
+            OpenMesh::Vec2f dterm1_du0 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u2 - u1)[1], (u2 - u1)[0]);
+            OpenMesh::Vec3f dterm2_du0 = -cot2 * u1 - cot1 * u2 + (cot1 + cot2) * u0;
+            OpenMesh::Vec2f dE_du0 = dterm1_du0 * term2 + OpenMesh::Vec2f(dterm2_du0[0], dterm2_du0[1]) * term1; 
+            gradx[vs[0].idx() * 2] += dE_du0[0];
+            gradx[vs[0].idx() * 2 + 1] += dE_du0[1];
+        }
 
-        // dE / du1
-        OpenMesh::Vec2f dterm1_du1 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u0 - u2)[1], (u0 - u2)[0]);
-        OpenMesh::Vec3f dterm2_du1 = -cot2 * u0 - cot0 * u2 + (cot0 + cot2) * u1;
-        OpenMesh::Vec2f dE_du1 = dterm1_du1 * term2 + OpenMesh::Vec2f(dterm2_du1[0], dterm2_du1[1]) * term1; 
-        gradx[vs[1].idx() * 2] += dE_du1[0];
-        gradx[vs[1].idx() * 2 + 1] += dE_du1[1];
+        {
+            // dE / du1
+            OpenMesh::Vec2f dterm1_du1 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u0 - u2)[1], (u0 - u2)[0]);
+            OpenMesh::Vec3f dterm2_du1 = -cot2 * u0 - cot0 * u2 + (cot0 + cot2) * u1;
+            OpenMesh::Vec2f dE_du1 = dterm1_du1 * term2 + OpenMesh::Vec2f(dterm2_du1[0], dterm2_du1[1]) * term1; 
+            gradx[vs[1].idx() * 2] += dE_du1[0];
+            gradx[vs[1].idx() * 2 + 1] += dE_du1[1];
+        }
 
-        // dE / du2
-        OpenMesh::Vec2f dterm1_du2 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u1 - u0)[1], (u1 - u0)[0]);
-        OpenMesh::Vec3f dterm2_du2 = -cot0 * u1 - cot1 * u0 + (cot0 + cot1) * u2;
-        OpenMesh::Vec2f dE_du2 = dterm1_du2 * term2 + OpenMesh::Vec2f(dterm2_du2[0], dterm2_du2[1]) * term1; 
-        gradx[vs[2].idx() * 2] += dE_du2[0];
-        gradx[vs[2].idx() * 2 + 1] += dE_du2[1];
+        {
+            // dE / du2
+            OpenMesh::Vec2f dterm1_du2 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u1 - u0)[1], (u1 - u0)[0]);
+            OpenMesh::Vec3f dterm2_du2 = -cot0 * u1 - cot1 * u0 + (cot0 + cot1) * u2;
+            OpenMesh::Vec2f dE_du2 = dterm1_du2 * term2 + OpenMesh::Vec2f(dterm2_du2[0], dterm2_du2[1]) * term1; 
+            gradx[vs[2].idx() * 2] += dE_du2[0];
+            gradx[vs[2].idx() * 2 + 1] += dE_du2[1];
+        }
     }
 
+    int cnt = 0;
     // the singularity term
     for (auto e: mesh.all_edges())
         if (mesh.is_boundary(e)) {
@@ -367,11 +374,12 @@ double getStepLength(const Mesh& mesh, const Eigen::VectorXf& params, const Eige
     double ene0 = getEnergy(mesh, params, epsilon);
     double enei = getEnergy(mesh, params + alpha0 * p, epsilon);
     double dphi = p.dot(grad);
-    while (enei > ene0) {
-        alpha0 /= 2.0;
+    while (enei > ene0 + c1 * alpha0 * dphi) {
+        alpha0 *= 0.50;
         enei = getEnergy(mesh, params + alpha0 * p, epsilon);
     }
-
+    std::cout << "Step len: " << alpha0 << std::endl;
+    return alpha0;
     if (enei < ene0 + c1 * alpha0 * dphi)
         return  alpha0;
     double alpha = - dphi * alpha0 * alpha0 / (2.0f * (enei - ene0 - dphi * alpha0));
@@ -410,6 +418,7 @@ auto LBFGS(Mesh& mesh, Eigen::VectorXf x, const double& error) {
     float epsilon = getAveLen(mesh, x) * 0.25f;
     Eigen::VectorXf gradx = calcGrad(mesh, x, epsilon);
     int k = 0;
+    int step = 0;
     do{
         // compute the average length
         epsilon = getAveLen(mesh, x) * 0.25f;
@@ -430,6 +439,9 @@ auto LBFGS(Mesh& mesh, Eigen::VectorXf x, const double& error) {
             r += ss[i] * (alphas[i % sz] - beta);
         }
         float step_len = getStepLength(mesh, x, -r, gradx0, epsilon);
+        auto energy = getEnergy(mesh, x, epsilon, true);
+        std::cout << "Step: " << step++ << " Norm of Gradient: "<< gradx.norm() << std::endl;
+        // update array for y, s, rho
         ss[k % sz] = step_len * -r;
         x += ss[k % sz];
         gradx = calcGrad(mesh, x, epsilon);
@@ -449,8 +461,7 @@ auto gradientDescent(Mesh& mesh, Eigen::VectorXf x, const double& error) {
         auto energy = getEnergy(mesh, x, epsilon, true);
         auto gradx = calcGrad(mesh, x, epsilon); 
         std::cout << "Step: " << step++ << " Norm of Gradient: "<< gradx.norm() << std::endl;
-        // auto len = getStepLength(mesh, x, -gradx, gradx, epsilon);
-        float len = 1e-12;
+        auto len = getStepLength(mesh, x, -gradx, gradx, epsilon);
         x -= len * gradx;
     }while(true);
     
@@ -465,8 +476,8 @@ std::vector<OpenMesh::Vec2f> paratimization(Mesh& mesh, double error) {
         x[2 * i + 1] = init_param[i][1];
     }
 
-    // x = LBFGS(mesh, x, error); // optimize the parameterization using Quasi Newton Method
-    x = gradientDescent(mesh, x, 0.05);
+    x = LBFGS(mesh, x, 0.0005); // optimize the parameterization using Quasi Newton Method
+    // x = gradientDescent(mesh, x, 0.05);
 
     for (int i = 0; i < init_param.size(); ++i) {
         init_param[i][0] = x[2 * i];
@@ -474,4 +485,19 @@ std::vector<OpenMesh::Vec2f> paratimization(Mesh& mesh, double error) {
     }
 
     return std::move(init_param);
+}
+
+void test(Mesh& mesh, const std::vector<OpenMesh::Vec2f>& params) {
+    Eigen::VectorXf x(params.size() * 2);
+    for (int i = 0; i < params.size(); ++i) {
+        x[2 * i] = params[i][0];
+        x[2 * i + 1] = params[i][1];
+    }
+    auto epsilon = getAveLen(mesh, x) * 0.25f;
+    auto gradx = calcGrad(mesh, x, epsilon);
+    getEnergy(mesh, x, epsilon, true);
+    std::cout << "Log: [Gradient]\n";
+    for (int i = 0; i < params.size(); ++i) {
+        std::cout << "(" << gradx[i * 2] << ", " << gradx[i * 2 + 1] << ")" << std::endl;
+    }
 }

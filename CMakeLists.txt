@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.0)
 project(MIPS)
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Debug")
 
-add_definitions("-O3 -g")
+add_definitions("-g")
 aux_source_directory(SRC_LIST ./src)
 include_directories(./ ./include)
 set(CMAKE_CXX_STANDARD 14)
