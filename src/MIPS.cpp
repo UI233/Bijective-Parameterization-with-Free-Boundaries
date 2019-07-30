@@ -2,12 +2,15 @@
 #include "Eigen/SparseCholesky"
 #include "Eigen/Core"
 #include <iostream>
+#include <string>
 #include <algorithm>
 #include <unordered_map>
 #include <set>
 #include <limits>
 #include <queue>
+#include "OpenMesh/Core/IO/MeshIO.hh"
 
+#define TEST
 // the hashmap for neighbor search
 class myHash {
 public:
@@ -24,12 +27,12 @@ auto sq(const T& v) -> decltype(v * v) {
 }
 
 // Project the point onto the unit square from a circle
-OpenMesh::Vec2f project2Circle(float theta) {
-    return OpenMesh::Vec2f(cosf(theta), sinf(theta));
+OpenMesh::Vec2d project2Circle(double theta) {
+    return OpenMesh::Vec2d(cos(theta), sin(theta));
 }
 
 // Get the initial parameterization of the mesh via
-// minimizing the energy E = 1/2 \sum{|| p_i - p_j ||} for the inner point while the boundary points are projected onto the unit circle (Floater Method)
+// minimizing the energy E = 1/2 \sum{|| p_i - p_j ||} for the inner point while the boundary points are projected onto the unit circle (doubleer Method)
 std::vector<OpenMesh::Vec2f> init(Mesh& mesh) {
     std::set<Mesh::VertexHandle> boundaries;
     std::vector<OpenMesh::Vec2f> res;
@@ -55,8 +58,8 @@ std::vector<OpenMesh::Vec2f> init(Mesh& mesh) {
         std::vector<bool> visited;
         visited.resize(vertices_sz);
         std::fill(visited.begin(), visited.end(), 0);
-        double angle = 0.0f;
-        double length = 0.0f;
+        double angle = 0.0;
+        double length = 0.0;
         // compute the total length
         for (auto st = *boundaries.begin(); !visited[st.idx()];) {
             visited[st.idx()] = true;
@@ -77,14 +80,14 @@ std::vector<OpenMesh::Vec2f> init(Mesh& mesh) {
 
         // compute the boundary point
         std::fill(visited.begin(), visited.end(), 0);
-        res[(*boundaries.begin()).idx()] = project2Circle(0.0f);
+        res[(*boundaries.begin()).idx()] = project2Circle(0.0);
         for (auto st = *boundaries.begin(); !visited[st.idx()];) {
             visited[st.idx()] = true;
             for (auto nx = mesh.vv_begin(st); nx.is_valid(); ++nx){ 
                 if (boundaries.count(*nx) && !visited[(*nx).idx()]) {
                     angle += 2.0 * M_PI * (mesh.point(*nx) - mesh.point(st)).norm() / length;
                     st = *nx;
-                    res[(*nx).idx()] = project2Circle(angle);
+                    res[(*nx).idx()] = project2Circle(-angle);
                     break;
                 }
             }
@@ -140,8 +143,8 @@ std::vector<OpenMesh::Vec2f> init(Mesh& mesh) {
 }
 
 // Get the energy E_D + E_B for current parameterization and ε
-float getEnergy(const Mesh& mesh, const Eigen::VectorXf& params, float epsilon, bool display = false) {
-    float energy = 0.0f;
+double getEnergy(const Mesh& mesh, const Eigen::VectorXd& params, double epsilon, bool display = false) {
+    double energy = 0.0;
     using OpenMesh::dot;
     // distortion term
     for (auto f: mesh.all_faces()) {
@@ -149,31 +152,31 @@ float getEnergy(const Mesh& mesh, const Eigen::VectorXf& params, float epsilon, 
         Mesh::VertexHandle vs[3];
         for (auto v: mesh.fv_range(f))
             vs[i++] = v;
-        OpenMesh::Vec3f u0(params[2 * vs[0].idx()], params[2 * vs[0].idx() + 1], 0.0f);
-        OpenMesh::Vec3f ue1 = OpenMesh::Vec3f(params[2 * vs[1].idx()], params[2 * vs[1].idx() + 1], 0.0f) - u0;
-        OpenMesh::Vec3f ue2 = OpenMesh::Vec3f(params[2 * vs[2].idx()], params[2 * vs[2].idx() + 1], 0.0f) - u0;
+        OpenMesh::Vec3f u0(params[2 * vs[0].idx()], params[2 * vs[0].idx() + 1], 0.0);
+        OpenMesh::Vec3f ue1 = OpenMesh::Vec3f(params[2 * vs[1].idx()], params[2 * vs[1].idx() + 1], 0.0) - u0;
+        OpenMesh::Vec3f ue2 = OpenMesh::Vec3f(params[2 * vs[2].idx()], params[2 * vs[2].idx() + 1], 0.0) - u0;
 
         OpenMesh::Vec3f p0 = mesh.point(vs[0]);
         OpenMesh::Vec3f pe1 = mesh.point(vs[1]) - p0;
         OpenMesh::Vec3f pe2 = mesh.point(vs[2]) - p0;
 
         // calculate the area of corresponding triangle
-        float su = 0.5f * OpenMesh::cross(ue1, ue2).norm();
-        float sp = 0.5f * OpenMesh::cross(pe1, pe2).norm();
+        double su = 0.5f * OpenMesh::cross(ue1, ue2).norm();
+        double sp = 0.5f * OpenMesh::cross(pe1, pe2).norm();
 
         energy += (1 + (sp * sp) / (su * su)) * (sq(ue2.norm()) * sq(pe1.norm()) + sq(ue1.norm()) * sq(pe2.norm()) - 2.0f * dot(ue2, ue1) * dot(pe2, pe1)) / (4.0f * sp);
     }
 
-    float tseng = 0.0f;
+    double tseng = 0.0;
     // the barrier term
     for (auto e: mesh.all_edges())
         if (mesh.is_boundary(e)) {
-            float seng = 0.0f;
+            double seng = 0.0;
             int st = mesh.to_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
             int end = mesh.from_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
-            OpenMesh::Vec2f pst(params[2 * st], params[2 * st + 1]); 
-            OpenMesh::Vec2f pend(params[2 * end], params[2 * end + 1]); 
-            OpenMesh::Vec2f edge = pend - pst;
+            OpenMesh::Vec2d pst(params[2 * st], params[2 * st + 1]); 
+            OpenMesh::Vec2d pend(params[2 * end], params[2 * end + 1]); 
+            OpenMesh::Vec2d edge = pend - pst;
 
             // The range for neighborhood searching
             int x_st = std::min(params[2 * st], params[2 * end]) / epsilon - 1;
@@ -186,13 +189,13 @@ float getEnergy(const Mesh& mesh, const Eigen::VectorXf& params, float epsilon, 
                     auto itr_pr = neighbors.equal_range(OpenMesh::Vec2i(x, y));
                     for (auto itr = itr_pr.first; itr != itr_pr.second; ++itr)
                         if (itr->second != st && itr->second != end) {
-                            OpenMesh::Vec2f point(params[itr->second * 2], params[itr->second * 2 + 1]);
-                            float projected = OpenMesh::dot(point - pst, edge) / edge.norm();
-                            float dis = sqrtf(OpenMesh::dot(point - pst, point - pst) - projected * projected);
+                            OpenMesh::Vec2d point(params[itr->second * 2], params[itr->second * 2 + 1]);
+                            double projected = OpenMesh::dot(point - pst, edge) / edge.norm();
+                            double dis = sqrtf(OpenMesh::dot(point - pst, point - pst) - projected * projected);
                             // std::cout << "Dis: " << dis << std::endl;
-                            if (dis == 0.0f)
-                                return std::numeric_limits<float>::infinity();
-                            seng = std::max(0.0f, epsilon / dis - 1.0f);
+                            if (dis == 0.0)
+                                return std::numeric_limits<double>::infinity();
+                            seng = std::max(0.0, epsilon / dis - 1.0);
                             tseng += seng * seng;
                         }
                 }
@@ -206,11 +209,10 @@ float getEnergy(const Mesh& mesh, const Eigen::VectorXf& params, float epsilon, 
     return energy;
 }
 
-
 // calculate the gradient of the energy function
-auto calcGrad(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
+auto calcGrad(const Mesh& mesh, const Eigen::VectorXd& x, double epsilon) {
     // the energy term
-    Eigen::VectorXf gradx(x.size());
+    Eigen::VectorXd gradx(x.size());
     gradx.setZero();
     // the gradient for distortion term
     for (auto f: mesh.all_faces()) {
@@ -218,56 +220,56 @@ auto calcGrad(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
         int i = 0;
         for (auto itr = mesh.cfv_ccwbegin(f); itr != mesh.cfv_ccwend(f); itr++)
             vs[i++] = *itr;
-        OpenMesh::Vec3f u0(x[2 * vs[0].idx()], x[2 * vs[0].idx() + 1], 0.0f);
-        OpenMesh::Vec3f u1(x[2 * vs[1].idx()], x[2 * vs[1].idx() + 1], 0.0f);
-        OpenMesh::Vec3f u2(x[2 * vs[2].idx()], x[2 * vs[2].idx() + 1], 0.0f);
-        OpenMesh::Vec3f ue1 = u1 - u0;
-        OpenMesh::Vec3f ue2 = u2 - u0;
+        OpenMesh::Vec3d u0(x[2 * vs[0].idx()], x[2 * vs[0].idx() + 1], 0.0);
+        OpenMesh::Vec3d u1(x[2 * vs[1].idx()], x[2 * vs[1].idx() + 1], 0.0);
+        OpenMesh::Vec3d u2(x[2 * vs[2].idx()], x[2 * vs[2].idx() + 1], 0.0);
+        OpenMesh::Vec3d ue1 = u1 - u0;
+        OpenMesh::Vec3d ue2 = u2 - u0;
 
-        OpenMesh::Vec3f p0 = mesh.point(vs[0]);
-        OpenMesh::Vec3f p1 = mesh.point(vs[1]);
-        OpenMesh::Vec3f p2 = mesh.point(vs[2]);
-        OpenMesh::Vec3f pe1 = p1 - p0;
-        OpenMesh::Vec3f pe2 = p2 - p0;
+        OpenMesh::Vec3d p0(mesh.point(vs[0])[0], mesh.point(vs[0])[1], mesh.point(vs[0])[2]);
+        OpenMesh::Vec3d p1(mesh.point(vs[1])[0], mesh.point(vs[1])[1], mesh.point(vs[1])[2]);
+        OpenMesh::Vec3d p2(mesh.point(vs[2])[0], mesh.point(vs[2])[1], mesh.point(vs[2])[2]);
+        OpenMesh::Vec3d pe1 = p1 - p0;
+        OpenMesh::Vec3d pe2 = p2 - p0;
 
         // calculate the area of corresponding triangle
-        float su = 0.5 * OpenMesh::cross(ue1, ue2).norm();
-        if (su == 0.0f) {
-            gradx[0] = std::numeric_limits<float>::infinity();
+        double su = 0.5 * OpenMesh::cross(ue1, ue2).norm();
+        if (su == 0.0) {
+            gradx[0] = std::numeric_limits<double>::infinity();
             return std::move(gradx);
         }
-        float sp = 0.5 * OpenMesh::cross(pe1, pe2).norm();
+        double sp = 0.5 * OpenMesh::cross(pe1, pe2).norm();
 
-        float cot0 = OpenMesh::dot(p1 - p0, p2 - p0) / OpenMesh::cross(p1 - p0, p2 - p0).norm();
-        float cot1 = OpenMesh::dot(p2 - p1, p0 - p1) / OpenMesh::cross(p2 - p1, p0 - p1).norm();
-        float cot2 = OpenMesh::dot(p1 - p2, p0 - p2) / OpenMesh::cross(p1 - p2, p0 - p2).norm();
+        double cot0 = OpenMesh::dot(p1 - p0, p2 - p0) / OpenMesh::cross(p1 - p0, p2 - p0).norm();
+        double cot1 = OpenMesh::dot(p2 - p1, p0 - p1) / OpenMesh::cross(p2 - p1, p0 - p1).norm();
+        double cot2 = OpenMesh::dot(p1 - p2, p0 - p2) / OpenMesh::cross(p1 - p2, p0 - p2).norm();
         
-        float term1 = (1 + (sp * sp) / (su * su));
-        float term2 = (sq(ue2.norm()) * sq(pe1.norm()) + sq(ue1.norm()) * sq(pe2.norm()) - 2.0f * dot(ue2, ue1) * dot(pe2, pe1)) / (4.0f * sp);
+        double term1 = (1 + (sp * sp) / (su * su));
+        double term2 = (sq(ue2.norm()) * sq(pe1.norm()) + sq(ue1.norm()) * sq(pe2.norm()) - 2.0f * dot(ue2, ue1) * dot(pe2, pe1)) / (4.0f * sp);
 
         {
             // dE / du0
-            OpenMesh::Vec2f dterm1_du0 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u2 - u1)[1], (u2 - u1)[0]);
-            OpenMesh::Vec3f dterm2_du0 = -cot2 * u1 - cot1 * u2 + (cot1 + cot2) * u0;
-            OpenMesh::Vec2f dE_du0 = dterm1_du0 * term2 + OpenMesh::Vec2f(dterm2_du0[0], dterm2_du0[1]) * term1; 
+            OpenMesh::Vec2d dterm1_du0 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2d(-(u2 - u1)[1], (u2 - u1)[0]);
+            OpenMesh::Vec3d dterm2_du0 = -cot2 * u1 - cot1 * u2 + (cot1 + cot2) * u0;
+            OpenMesh::Vec2d dE_du0 = dterm1_du0 * term2 + OpenMesh::Vec2d(dterm2_du0[0], dterm2_du0[1]) * term1; 
             gradx[vs[0].idx() * 2] += dE_du0[0];
             gradx[vs[0].idx() * 2 + 1] += dE_du0[1];
         }
 
         {
             // dE / du1
-            OpenMesh::Vec2f dterm1_du1 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u0 - u2)[1], (u0 - u2)[0]);
-            OpenMesh::Vec3f dterm2_du1 = -cot2 * u0 - cot0 * u2 + (cot0 + cot2) * u1;
-            OpenMesh::Vec2f dE_du1 = dterm1_du1 * term2 + OpenMesh::Vec2f(dterm2_du1[0], dterm2_du1[1]) * term1; 
+            OpenMesh::Vec2d dterm1_du1 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2d(-(u0 - u2)[1], (u0 - u2)[0]);
+            OpenMesh::Vec3d dterm2_du1 = -cot2 * u0 - cot0 * u2 + (cot0 + cot2) * u1;
+            OpenMesh::Vec2d dE_du1 = dterm1_du1 * term2 + OpenMesh::Vec2d(dterm2_du1[0], dterm2_du1[1]) * term1; 
             gradx[vs[1].idx() * 2] += dE_du1[0];
             gradx[vs[1].idx() * 2 + 1] += dE_du1[1];
         }
 
         {
             // dE / du2
-            OpenMesh::Vec2f dterm1_du2 = - (sp* sp) / (su * su * su) * OpenMesh::Vec2f(-(u1 - u0)[1], (u1 - u0)[0]);
-            OpenMesh::Vec3f dterm2_du2 = -cot0 * u1 - cot1 * u0 + (cot0 + cot1) * u2;
-            OpenMesh::Vec2f dE_du2 = dterm1_du2 * term2 + OpenMesh::Vec2f(dterm2_du2[0], dterm2_du2[1]) * term1; 
+            OpenMesh::Vec2d dterm1_du2 = -(sp* sp) / (su * su * su) * OpenMesh::Vec2d(-(u1 - u0)[1], (u1 - u0)[0]);
+            OpenMesh::Vec3d dterm2_du2 = -cot0 * u1 - cot1 * u0 + (cot0 + cot1) * u2;
+            OpenMesh::Vec2d dE_du2 = dterm1_du2 * term2 + OpenMesh::Vec2d(dterm2_du2[0], dterm2_du2[1]) * term1; 
             gradx[vs[2].idx() * 2] += dE_du2[0];
             gradx[vs[2].idx() * 2 + 1] += dE_du2[1];
         }
@@ -277,15 +279,14 @@ auto calcGrad(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
     // the singularity term
     for (auto e: mesh.all_edges())
         if (mesh.is_boundary(e)) {
-            float seng = 0.0f;
+            double seng = 0.0;
             int ui_idx = -1;
-            float mdis = 0.0f;
 
             int st = mesh.to_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
             int end = mesh.from_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
-            OpenMesh::Vec2f pst(x[2 * st], x[2 * st + 1]);
-            OpenMesh::Vec2f pend(x[2 * end], x[2 * end + 1]);
-            OpenMesh::Vec2f edge = pend - pst;
+            OpenMesh::Vec2d pst(x[2 * st], x[2 * st + 1]);
+            OpenMesh::Vec2d pend(x[2 * end], x[2 * end + 1]);
+            OpenMesh::Vec2d edge = pend - pst;
 
             // The range for neighborhood searching
             int x_st = std::min(x[2 * st], x[2 * end]) / epsilon - 1;
@@ -298,39 +299,39 @@ auto calcGrad(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
                     auto itr_pr = neighbors.equal_range(OpenMesh::Vec2i(xs, y));
                     for (auto itr = itr_pr.first; itr != itr_pr.second; ++itr)
                         if (itr->second != st && itr->second != end) {
-                            OpenMesh::Vec2f point(x[itr->second * 2], x[itr->second * 2 + 1]);
-                            float projected = OpenMesh::dot(point - pst, edge) / edge.norm();
-                            float dis = sqrtf(OpenMesh::dot(point - pst, point - pst) - projected * projected);
-                            if (dis == 0.0f) {
-                                gradx[0] = std::numeric_limits<float>::infinity();
+                            OpenMesh::Vec2d point(x[itr->second * 2], x[itr->second * 2 + 1]);
+                            double projected = OpenMesh::dot(point - pst, edge) / edge.norm();
+                            double dis = sqrtf(OpenMesh::dot(point - pst, point - pst) - projected * projected);
+                            if (dis == 0.0) {
+                                gradx[0] = std::numeric_limits<double>::infinity();
                                 return std::move(gradx);
                             }
-                            seng = std::max(0.0f, epsilon / dis - 1.0f);
+                            seng = std::max(0.0, epsilon / dis - 1.0);
                             // calculate the gradient
                             ui_idx = itr->second;
-                            if (ui_idx != -1 && seng != 0.0f) {
-                                OpenMesh::Vec2f grad_maxui;
-                                OpenMesh::Vec2f grad_maxu1;
-                                OpenMesh::Vec2f grad_maxu2;
-                                OpenMesh::Vec2f ui(x[ui_idx * 2], x[ui_idx * 2 + 1]);
+                            if (ui_idx != -1 && seng != 0.0) {
+                                OpenMesh::Vec2d grad_maxui;
+                                OpenMesh::Vec2d grad_maxu1;
+                                OpenMesh::Vec2d grad_maxu2;
+                                OpenMesh::Vec2d ui(x[ui_idx * 2], x[ui_idx * 2 + 1]);
                                 auto u1 = pst;
                                 auto u2 = pend;
-                                float projected = OpenMesh::dot(ui - u1, u2 - u1) / edge.norm();
-                                float dis = sqrtf(OpenMesh::dot(ui - u1, ui - u1) - projected * projected);
+                                double projected = OpenMesh::dot(ui - u1, u2 - u1) / edge.norm();
+                                double dis = sqrt(OpenMesh::dot(ui - u1, ui - u1) - projected * projected);
                                 // the unit vector othorgonal to the edge
                                 auto normal = ui - u1 - (u2 - u1).normalize() * projected;
                                 normal = normal.normalize();
                                 // dE / du2 u2 is the end point of this edge
-                                grad_maxu2 = -2 * seng * epsilon * projected / OpenMesh::dot(u2 - u1, u2 - u1) * normal / (mdis * mdis);
+                                grad_maxu2 = -2 * seng * epsilon * projected / OpenMesh::dot(u2 - u1, u2 - u1) * normal / (dis * dis);
                                 gradx[end * 2] += grad_maxu2[0];
                                 gradx[end * 2 + 1] += grad_maxu2[1];
                                 // dE / du1 u1 is the start point of this edge
                                 projected = OpenMesh::dot(ui - u2, u1 - u2) / edge.norm();
-                                grad_maxu1 = -2 * seng * epsilon * projected / OpenMesh::dot(u2 - u1, u2 - u1) * normal / (mdis * mdis);
+                                grad_maxu1 = -2 * seng * epsilon * projected / OpenMesh::dot(u2 - u1, u2 - u1) * normal / (dis * dis);
                                 gradx[st * 2] += grad_maxu1[0];
                                 gradx[st * 2 + 1] += grad_maxu1[1];
                                 // dE / dui ui is the point with maximal distance
-                                grad_maxui = -2 * seng * epsilon * normal / (mdis * mdis);
+                                grad_maxui = -2 * seng * epsilon * normal / (dis * dis);
                                 gradx[ui_idx * 2] += grad_maxui[0];
                                 gradx[ui_idx * 2 + 1] += grad_maxui[1];
                             }
@@ -341,14 +342,14 @@ auto calcGrad(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
 }
 
 // compute the average length of edges
-float getAveLen(const Mesh& mesh, const Eigen::VectorXf& x) {
+double getAveLen(const Mesh& mesh, const Eigen::VectorXd& x) {
     int count = 0;
-    float len = 0.0f;
+    double len = 0.0;
     for (auto e: mesh.all_edges()) {
         ++count;
         int st = mesh.to_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
         int end = mesh.from_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
-        OpenMesh::Vec2f ev(x[2 * st] - x[2 *end], x[2 * st + 1] - x[2 * end + 1]);
+        OpenMesh::Vec2d ev(x[2 * st] - x[2 *end], x[2 * st + 1] - x[2 * end + 1]);
         len += ev.norm();
     }
 
@@ -356,7 +357,7 @@ float getAveLen(const Mesh& mesh, const Eigen::VectorXf& x) {
 }
 
 // initialize the hash map for neighbor search
-void initHashMap(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
+void initHashMap(const Mesh& mesh, const Eigen::VectorXd& x, double epsilon) {
     neighbors.clear();
     for (int i = 0; i < x.size(); i += 2) {
         OpenMesh::VertexHandle handle(i / 2);
@@ -368,8 +369,7 @@ void initHashMap(const Mesh& mesh, const Eigen::VectorXf& x, float epsilon) {
 }
 
 // get the step length for line search
-double getStepLength(const Mesh& mesh, const Eigen::VectorXf& params, const Eigen::VectorXf& p, const Eigen::VectorXf& grad, const float& epsilon) {
-    double alpha0 = 1e-5;
+double getStepLength(const Mesh& mesh, const Eigen::VectorXd& params, const Eigen::VectorXd& p, const Eigen::VectorXd& grad, const double& epsilon, double alpha0) {
     constexpr double c1 = 1e-4;
     double ene0 = getEnergy(mesh, params, epsilon);
     double enei = getEnergy(mesh, params + alpha0 * p, epsilon);
@@ -389,7 +389,7 @@ double getStepLength(const Mesh& mesh, const Eigen::VectorXf& params, const Eige
         // calculate the coeff of the cubic interpolation
         double dim0 = enei - ene0 - dphi * alpha;
         double dim1 = enei_0 - ene0 - dphi * alpha0;
-        double numerator = 1.0f / (alpha0 * alpha0 * alpha * alpha * (alpha - alpha0));
+        double numerator = 1.0 / (alpha0 * alpha0 * alpha * alpha * (alpha - alpha0));
 
         double a = (alpha0 * alpha0 * dim0 - alpha * alpha * dim1) * numerator;
         double b = (-alpha0 * alpha0 * alpha0 * dim0 + alpha * alpha * alpha * dim1) * numerator;
@@ -407,26 +407,39 @@ double getStepLength(const Mesh& mesh, const Eigen::VectorXf& params, const Eige
 }
 
 // To be tested
-auto LBFGS(Mesh& mesh, Eigen::VectorXf x, const double& error) {
+auto LBFGS(Mesh& mesh, Eigen::VectorXd x, const double& error) {
     static constexpr int sz = 7;
-    auto test = [&error](const Eigen::VectorXf& x) -> bool {
+    auto test = [&error](const Eigen::VectorXd& x) -> bool {
         return x.norm() > error;
     };
 
-    Eigen::VectorXf ss[sz], ys[sz];
-    float rhos[sz], alphas[sz];
-    float epsilon = getAveLen(mesh, x) * 0.25f;
-    Eigen::VectorXf gradx = calcGrad(mesh, x, epsilon);
+    Eigen::VectorXd ss[sz], ys[sz];
+    double rhos[sz], alphas[sz];
+    double epsilon = getAveLen(mesh, x) * 0.25f;
+    initHashMap(mesh, x, epsilon);
+    Eigen::VectorXd gradx = calcGrad(mesh, x, epsilon);
     int k = 0;
     int step = 0;
     do{
-        // compute the average length
-        epsilon = getAveLen(mesh, x) * 0.25f;
-        // initialize the hash map for neighborhood query
-        initHashMap(mesh, x, epsilon);
+        #ifdef TEST
+            Mesh omesh;
+            for (int i = 0; i < x.size(); i += 2) {
+                OpenMesh::Vec3f vert(x[i], x[i + 1], 0.0f);
+                omesh.add_vertex(vert);
+            }
+            for (auto face: mesh.all_faces()) {
+                int cnt = 0;
+                OpenMesh::VertexHandle handles[10];
+                for (auto v: mesh.fv_range(face)) 
+                    handles[cnt++] = v;
+                omesh.add_face(handles, cnt);
+            }
+            if(k % 10 == 0)
+                OpenMesh::IO::write_mesh(omesh, std::to_string(k) + "test" + "_param" +  ".obj");
+        #endif
         auto q = gradx;
         auto gradx0 = gradx;
-        Eigen::VectorXf r(x.size());
+        Eigen::VectorXd r(x.size());
         for (int i = k - 1; i >= std::max(0, k - sz); --i) {
             alphas[i % sz] = q.dot(ss[i % sz]) * rhos[i % sz];
             q -= alphas[i % sz] * ys[i % sz]; 
@@ -436,24 +449,28 @@ auto LBFGS(Mesh& mesh, Eigen::VectorXf x, const double& error) {
         else r = ss[(k - 1) % sz].dot(ys[(k - 1) % sz]) / ys[(k - 1) % sz].dot(ys[(k - 1) % sz]) * q;
         for (int i = std::max(0, k - sz); i < k; ++i) {
             auto beta = rhos[i % sz] * r.dot(ys[i %sz]);
-            r += ss[i] * (alphas[i % sz] - beta);
+            r += ss[i % sz] * (alphas[i % sz] - beta);
         }
-        float step_len = getStepLength(mesh, x, -r, gradx0, epsilon);
+        double step_len = getStepLength(mesh, x, -r, gradx0, epsilon, k == 0 ? 1e-5 : 1.0);
         auto energy = getEnergy(mesh, x, epsilon, true);
         std::cout << "Step: " << step++ << " Norm of Gradient: "<< gradx.norm() << std::endl;
         // update array for y, s, rho
         ss[k % sz] = step_len * -r;
         x += ss[k % sz];
+        // update the hashmap for computing the energy and gradient
+        epsilon = getAveLen(mesh, x) * 0.25f;
+        initHashMap(mesh, x, epsilon);
         gradx = calcGrad(mesh, x, epsilon);
         ys[k % sz] = gradx - gradx0;
-        rhos[k % sz] = 1.0f / ss[k % sz].dot(ys[k % sz]);
+        rhos[k % sz] = 1.0 / ss[k % sz].dot(ys[k % sz]);
+       
         ++k;
     }while(test(gradx)); // todo!
 
     return std::move(x);
 }
 
-auto gradientDescent(Mesh& mesh, Eigen::VectorXf x, const double& error) {
+auto gradientDescent(Mesh& mesh, Eigen::VectorXd x, const double& error) {
     int step = 0;
     do{
         auto epsilon = 0.25f * getAveLen(mesh, x);
@@ -461,7 +478,7 @@ auto gradientDescent(Mesh& mesh, Eigen::VectorXf x, const double& error) {
         auto energy = getEnergy(mesh, x, epsilon, true);
         auto gradx = calcGrad(mesh, x, epsilon); 
         std::cout << "Step: " << step++ << " Norm of Gradient: "<< gradx.norm() << std::endl;
-        auto len = getStepLength(mesh, x, -gradx, gradx, epsilon);
+        auto len = getStepLength(mesh, x, -gradx, gradx, epsilon, 1e-5);
         x -= len * gradx;
     }while(true);
     
@@ -470,7 +487,7 @@ auto gradientDescent(Mesh& mesh, Eigen::VectorXf x, const double& error) {
 
 std::vector<OpenMesh::Vec2f> paratimization(Mesh& mesh, double error) {
     auto init_param = init(mesh); // the initial parameterization for the mesh
-    Eigen::VectorXf x(init_param.size() * 2);
+    Eigen::VectorXd x(init_param.size() * 2);
     for (int i = 0; i < init_param.size(); ++i) {
         x[2 * i] = init_param[i][0];
         x[2 * i + 1] = init_param[i][1];
@@ -488,12 +505,10 @@ std::vector<OpenMesh::Vec2f> paratimization(Mesh& mesh, double error) {
 }
 
 void test(Mesh& mesh, const std::vector<OpenMesh::Vec2f>& params) {
-    Eigen::VectorXf x(params.size() * 2);
+    Eigen::VectorXd x(params.size() * 2);
     for (int i = 0; i < params.size(); ++i) {
-        x[2 * i] = params[i][0];
-        x[2 * i + 1] = params[i][1];
-    }
-    auto epsilon = getAveLen(mesh, x) * 0.25f;
+        x[2 * i] = params[i][0]; x[2 * i + 1] = params[i][1]; }
+       auto epsilon = getAveLen(mesh, x) * 0.25f;
     auto gradx = calcGrad(mesh, x, epsilon);
     getEnergy(mesh, x, epsilon, true);
     std::cout << "Log: [Gradient]\n";
