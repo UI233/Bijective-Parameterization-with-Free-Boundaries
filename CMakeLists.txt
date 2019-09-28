@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(MIPS)
+project(Bijective)
 set(CMAKE_BUILD_TYPE "Release")
 
 add_definitions("-O3 -g")
