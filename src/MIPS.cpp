@@ -9,8 +9,10 @@
 #include <limits>
 #include <queue>
 #include "OpenMesh/Core/IO/MeshIO.hh"
+// define TEST macro will enable the program to output the intermediate result during the parameterization
+// you can disable it by undef this macro
+#define TEST 
 
-#define TEST
 // the hashmap for neighbor search
 class myHash {
 public:
@@ -218,9 +220,6 @@ double getEnergy(const Mesh& mesh, const Eigen::VectorXd& params, double epsilon
         if (mesh.is_boundary(e)) {
             int st = mesh.to_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
             int end = mesh.from_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
-            // OpenMesh::Vec2d pst(params[2 * st], params[2 * st + 1]); 
-            // OpenMesh::Vec2d pend(params[2 * end], params[2 * end + 1]); 
-            // OpenMesh::Vec2d edge = pend - pst;
 
             // The range for neighborhood searching
             int x_st = std::min(params[2 * st], params[2 * end]) / epsilon - 1;
@@ -233,14 +232,6 @@ double getEnergy(const Mesh& mesh, const Eigen::VectorXd& params, double epsilon
                     auto itr_pr = neighbors.equal_range(OpenMesh::Vec2i(x, y));
                     for (auto itr = itr_pr.first; itr != itr_pr.second; ++itr)
                         if (itr->second != st && itr->second != end) {
-                            // OpenMesh::Vec2d point(params[itr->second * 2], params[itr->second * 2 + 1]);
-                            // double projected = OpenMesh::dot(point - pst, edge) / edge.norm();
-                            // double dis = sqrtf(OpenMesh::dot(point - pst, point - pst) - projected * projected);
-                            // if (OpenMesh::dot(point - pend, pst - pend) < 0.0) 
-                            //     dis = (point - pend).norm();
-                            // else if (OpenMesh::dot(point - pst, pend - pst) < 0.0) 
-                            //     dis = (point - pst).norm();
-                            // std::cout << "Dis: " << dis << std::endl;
                             double dis = getDistance(mesh, params, e, OpenMesh::VertexHandle(itr->second));
                             if (dis == 0.0)
                                 return std::numeric_limits<double>::infinity();
@@ -251,31 +242,6 @@ double getEnergy(const Mesh& mesh, const Eigen::VectorXd& params, double epsilon
         }
 
     energy += tseng;
-    
-    // double test_seng = 0.0;
-    // for (auto e: mesh.all_edges()) 
-    //     if (mesh.is_boundary(e)) {
-    //         int st = mesh.to_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
-    //         int end = mesh.from_vertex_handle(mesh.halfedge_handle(e, 0)).idx();
-    //         int cnt = 0;
-    //         for (auto v: mesh.all_vertices())
-    //             if (v.idx() != st  && v.idx() != end && mesh.is_boundary(v)) {
-    //                 ++cnt;
-    //                 OpenMesh::Vec2d pst(params[2 * st], params[2 * st + 1]); 
-    //                 OpenMesh::Vec2d pend(params[2 * end], params[2 * end + 1]); 
-    //                 OpenMesh::Vec2d edge = pend - pst;
-    //                 OpenMesh::Vec2d point(params[v.idx() * 2], params[v.idx() * 2 + 1]);
-    //                 double projected = OpenMesh::dot(point - pst, edge) / edge.norm();
-    //                 double dis = sqrtf(OpenMesh::dot(point - pst, point - pst) - projected * projected);
-    //                 if (OpenMesh::dot(point - pend, pst - pend) < 0.0) 
-    //                     dis = (point - pend).norm();
-    //                 else if (OpenMesh::dot(point - pst, pend - pst) < 0.0) 
-    //                     dis = (point - pst).norm();
-
-    //                 double seng = std::max(0.0, epsilon / dis - 1.0);
-    //                 test_seng += seng * seng;
-    //             }
-    //     }
     
     if(display)
         std::cout << "Rport:\nBoundary Barrier: [" << tseng << "]" << std::endl <<
@@ -546,35 +512,13 @@ double getStepLength(const Mesh& mesh, const Eigen::VectorXd& params, const Eige
         enei = getEnergy(mesh, params + alpha0 * p, epsilon);
     }
 
+#ifdef TEST
     std::cout << "Step len: " << alpha0 << " dphi: " << dphi << std::endl;
+#endif
     return alpha0;
-    // if (enei < ene0 + c1 * alpha0 * dphi)
-    //     return  alpha0;
-    // double alpha = - dphi * alpha0 * alpha0 / (2.0f * (enei - ene0 - dphi * alpha0));
-    // double enei_0 = enei; // energy_{i-1}
-    // enei = getEnergy(mesh, params + alpha * p, epsilon);
-    // while (!(enei < ene0 + c1 * alpha * dphi)) {
-    //     // calculate the coeff of the cubic interpolation
-    //     double dim0 = enei - ene0 - dphi * alpha;
-    //     double dim1 = enei_0 - ene0 - dphi * alpha0;
-    //     double numerator = 1.0 / (alpha0 * alpha0 * alpha * alpha * (alpha - alpha0));
-
-    //     double a = (alpha0 * alpha0 * dim0 - alpha * alpha * dim1) * numerator;
-    //     double b = (-alpha0 * alpha0 * alpha0 * dim0 + alpha * alpha * alpha * dim1) * numerator;
-    //     // calculate the aplha
-    //     alpha0 = alpha;
-    //     alpha = (-b + sqrt(b * b - 3 * a *dphi)) / (3 * a);
-
-    //     if (fabs(alpha - alpha0) / fabs(alpha0) < 0.11)
-    //         alpha = alpha0 / 2.0f;
-    //     // update 
-    //     enei_0 = enei;
-    //     enei = getEnergy(mesh, params + alpha * p, epsilon);
-    // }
-    // return alpha;
 }
 
-// To be tested
+// Optimize the objective energy using LBFGS algorithm
 auto LBFGS(Mesh& mesh, Eigen::VectorXd x, const double& error) {
     static constexpr int sz = 7;
     auto test = [&error](const Eigen::VectorXd& x) -> bool {
@@ -588,6 +532,7 @@ auto LBFGS(Mesh& mesh, Eigen::VectorXd x, const double& error) {
     int k = 0;
     int step = 0;
     do{
+        // Write intermediate result if test mode is enabled
         #ifdef TEST
             Mesh omesh;
             for (int i = 0; i < x.size(); i += 2) {
@@ -620,7 +565,9 @@ auto LBFGS(Mesh& mesh, Eigen::VectorXd x, const double& error) {
         }
         double step_len = getStepLength(mesh, x, -r, gradx0, epsilon, k == 0 ? 1e-5 : 1.0);
         auto energy = getEnergy(mesh, x, epsilon, true);
-        std::cout << "Step: " << step++ << " Norm of Gradient: "<< gradx.norm() << std::endl;
+        #ifdef TEST
+            std::cout << "Step: " << step++ << " Norm of Gradient: "<< gradx.norm() << std::endl;
+        #endif
         // update array for y, s, rho
         ss[k % sz] = step_len * -r;
         x += ss[k % sz];
@@ -629,26 +576,12 @@ auto LBFGS(Mesh& mesh, Eigen::VectorXd x, const double& error) {
         rhos[k % sz] = 1.0 / ss[k % sz].dot(ys[k % sz]);
        
         ++k;
-    }while(test(gradx)); // todo!
+    }while(test(gradx));
 
     return std::move(x);
 }
 
-auto gradientDescent(Mesh& mesh, Eigen::VectorXd x, const double& error) {
-    int step = 0;
-    double epsilon = 0.25f * getAveLen(mesh, x);
-    do{
-        auto energy = getEnergy(mesh, x, epsilon, true);
-        auto gradx = calcGrad(mesh, x, epsilon); 
-        std::cout << "Step: " << step++ << " Norm of Gradient: "<< gradx.norm() << std::endl;
-        auto len = getStepLength(mesh, x, -gradx, gradx, epsilon, 1e-5);
-        x -= len * gradx;
-    }while(true);
-    
-    return std::move(x);
-}
-
-std::vector<OpenMesh::Vec2f> paratimization(Mesh& mesh, double error) {
+std::vector<OpenMesh::Vec2f> bijectiveParameterization(Mesh& mesh, double error) {
     auto init_param = init(mesh); // the initial parameterization for the mesh
     Eigen::VectorXd x(init_param.size() * 2);
     for (int i = 0; i < init_param.size(); ++i) {
@@ -657,10 +590,10 @@ std::vector<OpenMesh::Vec2f> paratimization(Mesh& mesh, double error) {
     }
 
     auto epsilon = getAveLen(mesh, x) * 0.25;
-    std::cerr << checkCreterion(mesh, x, epsilon) << std::endl;
+    // std::cerr << checkCreterion(mesh, x, epsilon) << std::endl;
     x = LBFGS(mesh, x, 0.0005); // optimize the parameterization using Quasi Newton Method
-    // x = gradientDescent(mesh, x, 0.05);
 
+    // copy the result into a vector
     for (int i = 0; i < init_param.size(); ++i) {
         init_param[i][0] = x[2 * i];
         init_param[i][1] = x[2 * i + 1];
@@ -669,17 +602,32 @@ std::vector<OpenMesh::Vec2f> paratimization(Mesh& mesh, double error) {
     return std::move(init_param);
 }
 
-void test(Mesh& mesh, const std::vector<OpenMesh::Vec2f>& params) {
-    Eigen::VectorXd x(params.size() * 2);
-    for (int i = 0; i < params.size(); ++i) {
-        x[2 * i] = params[i][0]; 
-        x[2 * i + 1] = params[i][1]; 
-    }
-    auto epsilon = getAveLen(mesh, x) * 0.25f;
-    auto gradx = calcGrad(mesh, x, epsilon);
-    getEnergy(mesh, x, epsilon, true);
-    std::cout << "Log: [Gradient]\n";
-    for (int i = 0; i < params.size(); ++i) {
-        std::cout << "(" << gradx[i * 2] << ", " << gradx[i * 2 + 1] << ")" << std::endl;
-    }
-}
+// // Write a log for intermediate step
+// void writeLog(Mesh& mesh, const std::vector<OpenMesh::Vec2f>& params) {
+//     Eigen::VectorXd x(params.size() * 2);
+//     for (int i = 0; i < params.size(); ++i) {
+//         x[2 * i] = params[i][0]; 
+//         x[2 * i + 1] = params[i][1]; 
+//     }
+//     auto epsilon = getAveLen(mesh, x) * 0.25f;
+//     auto gradx = calcGrad(mesh, x, epsilon);
+//     getEnergy(mesh, x, epsilon, true);
+//     std::cout << "Log: [Gradient]\n";
+//     for (int i = 0; i < params.size(); ++i) {
+//         std::cout << "(" << gradx[i * 2] << ", " << gradx[i * 2 + 1] << ")" << std::endl;
+//     }
+// }
+
+// auto gradientDescent(Mesh& mesh, Eigen::VectorXd x, const double& error) {
+//     int step = 0;
+//     double epsilon = 0.25f * getAveLen(mesh, x);
+//     do{
+//         auto energy = getEnergy(mesh, x, epsilon, true);
+//         auto gradx = calcGrad(mesh, x, epsilon); 
+//         std::cout << "Step: " << step++ << " Norm of Gradient: "<< gradx.norm() << std::endl;
+//         auto len = getStepLength(mesh, x, -gradx, gradx, epsilon, 1e-5);
+//         x -= len * gradx;
+//     }while(true);
+    
+//     return std::move(x);
+// }

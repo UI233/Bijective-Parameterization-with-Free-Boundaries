@@ -22,6 +22,11 @@ This project was developed in  Ubuntu 18.04 using *OpenMesh* and *Eigen* library
 
 In other platforms with compiler supporting C++14(or higher), you have to replace the *OpenMesh* library in my repository with corresponding version for your environment and modify the path of *OpenMesh* library in CMakeLists.txt to build this project.
 
+## Constrains About Mesh
+
+The mesh to be parameterized should have boundary, which is better homeomorphic to a circle.
+Moreover the orientation of every triangle needs to be counterclockwise or the program may get stuck during optimization step.
+
 ## Getting Started
 
 ### How To Build

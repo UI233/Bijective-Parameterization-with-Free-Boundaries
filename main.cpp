@@ -1,8 +1,6 @@
 #define OM_STATIC_BUILD
 #include "MIPS.h"
-#include "OpenMesh/Core/IO/MeshIO.hh"
-#include <iostream>
-#include <fstream>
+#include "meshio.h"
 
 int main(int argc, char *argv[]) {
     std::string path;
@@ -11,35 +9,12 @@ int main(int argc, char *argv[]) {
         std::cin >> path;
     }
     else path = argv[1];
-    // Import mesh
-    Mesh mesh;
-    OpenMesh::IO::read_mesh(mesh, argv[1]);
-    mesh.triangulate();
-    // for (auto it = mesh.vertices_begin(); it != mesh.vertices_end(); ++it) {
-    //     auto point = mesh.point(*it);
-    //     std::cout << point[0] << " " << point[1] << " " << point[2] << std::endl;
-    // }
-
-    auto param = paratimization(mesh);
-  
-    Mesh omesh;
-    for (auto v: param) {
-        OpenMesh::Vec3f vert(v[0], v[1], 0.0f);
-        omesh.add_vertex(vert);
-    }
-    for (auto face: mesh.all_faces()) {
-        int cnt = 0;
-        OpenMesh::VertexHandle handles[10];
-        for (auto v: mesh.fv_range(face)) 
-            handles[cnt++] = v;
-        omesh.add_face(handles, cnt);
-    }
+    // Import the original mesh
+    auto mesh = getOriginalMesh(path);
+    // parameterize the mesh    
+    auto param = bijectiveParameterization(mesh);
+    // export the parameterization
+    auto omesh = getParameterizedMesh(mesh, param);
     OpenMesh::IO::write_mesh(omesh, path + "_param.obj");
-
-#ifdef TEST_PARAM
-    using vec = OpenMesh::Vec2f;
-    std::vector<OpenMesh::Vec2f> hh{vec(1.0f, 0.0f), vec(0.0f, 1.0f), vec(1.0f, 1.0f), vec(0.0f, 0.0f)};
-    test(mesh, hh);
-#endif
     return 0;
 }
